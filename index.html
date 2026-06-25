@@ -1,339 +1,254 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Marketplace CI</title>
-  <style>
-    * {box-sizing:border-box; margin:0; padding:0; font-family:Arial}
-    body {max-width:1100px; margin:auto; padding:1rem}
-    nav {background:#222; color:white; padding:1rem; display:flex; gap:2rem; align-items:center; margin-bottom:2rem; flex-wrap:wrap}
-    nav a {color:white; text-decoration:none}
-    .hidden {display:none}
-    .form-box {max-width:500px; margin:2rem auto; padding:2rem; border:1px solid #eee; border-radius:8px}
-    input, select, textarea {width:100%; padding:0.7rem; margin:0.5rem 0; border:1px solid #ccc; border-radius:4px}
-    button {padding:0.7rem 1.2rem; border:none; border-radius:4px; cursor:pointer; font-weight:bold}
-    .btn-orange {background:#f57c00; color:white}
-    .btn-green {background:#2e7d32; color:white}
-    .btn-blue {background:#2196F3; color:white}
-    .produit {display:flex; gap:1.5rem; padding:1rem; border-bottom:1px solid #eee; margin:1rem 0; flex-wrap:wrap}
-    .produit img {width:120px; height:120px; object-fit:contain}
-    .prix {font-size:1.2rem; font-weight:bold; color:#2e7d32}
-    .info-paiement {padding:0.8rem; background:#e8f4fd; border-radius:4px; margin:1rem 0; border-left:4px solid #2196F3}
-    .statut {padding:0.3rem 0.6rem; border-radius:3px; font-size:0.9rem; color:white}
-    .attente {background:#f59e0b}
-    .payee {background:#10b981}
-    .expediee {background:#3b82f6}
-    .annulee {background:#ef4444}
-    #panier {position:fixed; right:1rem; top:5rem; width:300px; background:white; border:1px solid #ddd; padding:1rem; border-radius:6px; box-shadow:0 0 10px #0002; z-index:999}
-    .ligne-panier {display:flex; justify-content:space-between; align-items:center; margin:0.5rem 0; padding:0.4rem 0; border-bottom:1px dashed #eee}
-  </style>
+    <meta charset="UTF-8">
+    <!-- Important pour l'affichage sur mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Shop - Place de marché</title>
+    <script>
+        // ✅ ADRESSE CORRIGÉE : plus de localhost, ton vrai site en ligne
+        const API_URL = "https://my-shop-9j3j.onrender.com";
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { background: #f8f9fa; line-height: 1.6; }
+        header { background: #2c3e50; color: white; padding: 1rem 5%; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+        .logo { font-size: 1.5rem; font-weight: bold; }
+        nav a { color: white; margin-left: 1.5rem; text-decoration: none; }
+        nav a:hover { color: #f39c12; }
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 5%; }
+        .section { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 2rem; display: none; }
+        .section.active { display: block; }
+        h2 { color: #2c3e50; margin-bottom: 1.5rem; text-align: center; }
+        input, select, textarea { width: 100%; padding: 0.8rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; }
+        button { width: 100%; padding: 0.9rem; background: #27ae60; color: white; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; font-weight: bold; }
+        button:hover { background: #219653; }
+        .produits-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+        .carte-produit { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        .carte-produit img { width: 100%; height: 180px; object-fit: cover; border-radius: 4px; margin-bottom: 1rem; }
+        .prix { font-size: 1.3rem; font-weight: bold; color: #e67e22; margin: 0.5rem 0; }
+        .message { padding: 1rem; margin: 1rem 0; border-radius: 4px; text-align: center; }
+        .succes { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .erreur { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .deconnexion { background: #e74c3c; }
+        .deconnexion:hover { background: #c0392b; }
+    </style>
 </head>
 <body>
-  <nav>
-    <h2>🛒 Marketplace CI</h2>
-    <a href="#" onclick="afficherPage('accueil')">Accueil</a>
-    <a href="#" onclick="afficherPage('mes-commandes')" class="hidden" id="lienCommandes">Mes commandes</a>
-    <a href="#" onclick="afficherPage('connexion')" id="lienConnexion">Se connecter</a>
-    <a href="#" onclick="deconnexion()" class="hidden" id="lienDeconnexion">Déconnexion</a>
-    <a href="#" onclick="afficherPage('vendeur')" class="hidden" id="lienVendeur">Espace Vendeur</a>
-  </nav>
 
-  <div id="page-accueil">
-    <h2>Produits disponibles</h2>
-    <div id="liste-produits"></div>
-  </div>
+<header>
+    <div class="logo">🛒 My Shop</div>
+    <nav id="menu">
+        <a href="#" onclick="afficherSection('accueil')">Accueil</a>
+        <a href="#" onclick="afficherSection('inscription')" id="lienInscription">S'inscrire</a>
+        <a href="#" onclick="afficherSection('connexion')" id="lienConnexion">Se connecter</a>
+        <a href="#" onclick="afficherSection('espaceVendeur')" id="lienVendeur" style="display:none;">Espace Vendeur</a>
+        <a href="#" onclick="afficherSection('mesCommandes')" id="lienCommandes" style="display:none;">Mes Commandes</a>
+        <a href="#" onclick="deconnecter()" id="lienDeconnexion" style="display:none;" class="deconnexion">Se déconnecter</a>
+    </nav>
+</header>
 
-  <div id="page-connexion" class="hidden">
-    <div class="form-box">
-      <h2>Connexion</h2>
-      <input type="email" id="email" placeholder="Adresse email">
-      <input type="password" id="mdp" placeholder="Mot de passe">
-      <button class="btn-orange" onclick="connexion()">Se connecter</button>
-      <p style="margin-top:1rem;">Pas de compte ? <a href="#" onclick="afficherPage('inscription')">Créer un compte</a></p>
-    </div>
-  </div>
+<div class="container">
 
-  <div id="page-inscription" class="hidden">
-    <div class="form-box">
-      <h2>Créer mon compte</h2>
-      <input type="text" id="reg-nom" placeholder="Nom complet" required>
-      <input type="email" id="reg-email" placeholder="Adresse email" required>
-      <input type="tel" id="reg-tel" placeholder="Numéro de téléphone" required>
-      <input type="password" id="reg-mdp" placeholder="Mot de passe" required>
-      <select id="reg-role">
-        <option value="client">Je suis client</option>
-        <option value="commercant">Je suis commerçant</option>
-      </select>
-      <button class="btn-green" onclick="inscription()">S'inscrire</button>
-    </div>
-  </div>
+    <!-- ACCUEIL -->
+    <section id="accueil" class="section active">
+        <h2>Bienvenue sur My Shop</h2>
+        <p style="text-align:center; margin-bottom:2rem;">Votre place de marché en Côte d'Ivoire — achetez et vendez en toute simplicité !</p>
+        <div id="listeProduits" class="produits-grid"></div>
+    </section>
 
-  <div id="page-vendeur" class="hidden">
-    <div class="form-box">
-      <h2>Ajouter un produit</h2>
-      <form id="form-produit" enctype="multipart/form-data">
-        <input name="nom" placeholder="Nom du produit" required>
-        <textarea name="description" rows="3" placeholder="Description détaillée"></textarea>
-        <input name="prix" type="number" min="0" step="1" placeholder="Prix en FCFA" required>
-        <input name="stock" type="number" min="1" placeholder="Quantité en stock" required>
-        <input name="categorie" placeholder="Catégorie (ex: électronique, mode, maison)">
-        <input name="image" type="file" accept="image/*">
-        <button type="submit" class="btn-green" style="width:100%; margin-top:1rem;">Enregistrer le produit</button>
-      </form>
-    </div>
-  </div>
+    <!-- INSCRIPTION -->
+    <section id="inscription" class="section">
+        <h2>Créer mon compte</h2>
+        <div id="msgInscription"></div>
+        <input type="text" id="nom" placeholder="Nom complet" required>
+        <input type="email" id="email" placeholder="Adresse email" required>
+        <input type="tel" id="telephone" placeholder="Numéro de téléphone" required>
+        <input type="password" id="motDePasse" placeholder="Mot de passe" required>
+        <select id="role">
+            <option value="client">Client (pour acheter)</option>
+            <option value="commercant">Commerçant (pour vendre)</option>
+        </select>
+        <button onclick="inscrire()">Créer mon compte</button>
+    </section>
 
-  <div id="page-mes-commandes" class="hidden">
-    <h2>Mes commandes</h2>
-    <div id="liste-commandes"></div>
-  </div>
+    <!-- CONNEXION -->
+    <section id="connexion" class="section">
+        <h2>Me connecter</h2>
+        <div id="msgConnexion"></div>
+        <input type="email" id="emailCo" placeholder="Adresse email" required>
+        <input type="password" id="motDePasseCo" placeholder="Mot de passe" required>
+        <button onclick="connecter()">Se connecter</button>
+    </section>
 
-  <!-- Panier -->
-  <div id="panier">
-    <h3>🛒 Mon panier</h3>
-    <div id="contenu-panier"><p>Votre panier est vide</p></div>
-    <hr style="margin:1rem 0;">
-    <div><strong>Total : </strong><span id="montant-total">0</span> FCFA</div>
-    <button class="btn-orange" onclick="afficherFormPaiement()" style="width:100%; margin-top:1rem;">Passer la commande</button>
+    <!-- ESPACE VENDEUR -->
+    <section id="espaceVendeur" class="section">
+        <h2>Ajouter un nouveau produit</h2>
+        <div id="msgVendeur"></div>
+        <input type="text" id="nomProduit" placeholder="Nom du produit" required>
+        <textarea id="descriptionProduit" placeholder="Description détaillée" rows="3" required></textarea>
+        <input type="number" id="prixProduit" placeholder="Prix en FCFA" min="1" required>
+        <input type="number" id="stockProduit" placeholder="Quantité en stock" min="1" required>
+        <input type="text" id="categorieProduit" placeholder="Catégorie (ex: Vêtements, Électronique...)" required>
+        <input type="file" id="imageProduit" accept="image/*" required>
+        <button onclick="ajouterProduit()">Enregistrer le produit</button>
+    </section>
 
-    <div id="form-paiement" class="hidden" style="margin-top:1.5rem; border-top:1px solid #eee; padding-top:1rem;">
-      <h4>Mode de paiement</h4>
-      <select id="mode-paiement" onchange="afficherInfosPaiement()" required>
-        <option value="">Choisir...</option>
-        <option value="orange">Orange Money</option>
-        <option value="mtn">MTN Mobile Money</option>
-        <option value="wave">Wave</option>
-      </select>
-      <div id="infos-paiement" class="info-paiement hidden"></div>
-      <input type="tel" id="tel-client" placeholder="Votre numéro de téléphone" pattern="[0-9]{8,10}" required>
-      <button onclick="confirmerPaiement()" class="btn-green" style="width:100%; margin-top:1rem;">Confirmer la commande</button>
-    </div>
-  </div>
+    <!-- MES COMMANDES -->
+    <section id="mesCommandes" class="section">
+        <h2>Mes commandes</h2>
+        <div id="listeCommandes"></div>
+    </section>
 
-  <script>
-    let token = localStorage.getItem('token') || '';
-    let panier = [];
+</div>
 
-    const NUMEROS_RECEPTION = {
-      orange: "0710280242",
-      mtn: "0503419696",
-      wave: "0710280242"
-    };
+<script>
+// Affichage des sections
+function afficherSection(id) {
+    document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.message').forEach(msg => msg.textContent = '');
+}
 
-    function afficherPage(id) {
-      document.querySelectorAll('body > div[id^="page-"]').forEach(d => d.classList.add('hidden'));
-      document.getElementById(`page-${id}`).classList.remove('hidden');
-      if (id === 'accueil') chargerProduits();
-      if (id === 'mes-commandes') chargerCommandes();
+// Inscription
+async function inscrire() {
+    const nom = document.getElementById('nom').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const tel = document.getElementById('telephone').value.trim();
+    const mdp = document.getElementById('motDePasse').value;
+    const role = document.getElementById('role').value;
+    const msg = document.getElementById('msgInscription');
+
+    try {
+        const res = await fetch(`${API_URL}/api/inscription`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nom, email, telephone: tel, motDePasse: mdp, role })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.erreur || 'Erreur lors de la création');
+
+        msg.className = 'message succes';
+        msg.textContent = 'Compte créé avec succès ! Vous pouvez vous connecter.';
+        setTimeout(() => afficherSection('connexion'), 1500);
+    } catch (err) {
+        msg.className = 'message erreur';
+        msg.textContent = err.message;
     }
+}
 
-    async function inscription() {
-      const data = {
-        nom: document.getElementById('reg-nom').value,
-        email: document.getElementById('reg-email').value,
-        telephone: document.getElementById('reg-tel').value,
-        motDePasse: document.getElementById('reg-mdp').value,
-        role: document.getElementById('reg-role').value
-      };
-      const res = await fetch('/api/inscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      const result = await res.json();
-      if (result.token) {
-        token = result.token;
-        localStorage.setItem('token', token);
-        alert('✅ Compte créé avec succès !');
-        majInterface();
-        afficherPage('accueil');
-      } else alert(`❌ Erreur : ${result.erreur}`);
-    }
+// Connexion
+async function connecter() {
+    const email = document.getElementById('emailCo').value.trim();
+    const mdp = document.getElementById('motDePasseCo').value;
+    const msg = document.getElementById('msgConnexion');
 
-    async function connexion() {
-      const res = await fetch('/api/connexion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: document.getElementById('email').value,
-          motDePasse: document.getElementById('mdp').value
-        })
-      });
-      const result = await res.json();
-      if (result.token) {
-        token = result.token;
-        localStorage.setItem('token', token);
-        alert('✅ Connexion réussie !');
-        majInterface();
-        afficherPage('accueil');
-      } else alert(`❌ Erreur : ${result.erreur}`);
-    }
+    try {
+        const res = await fetch(`${API_URL}/api/connexion`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, motDePasse: mdp })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.erreur || 'Identifiants incorrects');
 
-    function deconnexion() {
-      token = '';
-      localStorage.removeItem('token');
-      majInterface();
-      afficherPage('accueil');
-    }
-
-    function majInterface() {
-      const connecte = !!token;
-      document.getElementById('lienConnexion').classList.toggle('hidden', connecte);
-      document.getElementById('lienDeconnexion').classList.toggle('hidden', !connecte);
-      document.getElementById('lienVendeur').classList.toggle('hidden', !connecte);
-      document.getElementById('lienCommandes').classList.toggle('hidden', !connecte);
-    }
-
-    async function chargerProduits() {
-      const res = await fetch('/api/produits');
-      const produits = await res.json();
-      document.getElementById('liste-produits').innerHTML = produits.length ?
-        produits.map(p => `
-          <div class="produit">
-            <img src="${p.image || '/placeholder.png'}" alt="${p.nom}">
-            <div>
-              <h3>${p.nom}</h3>
-              <p>${p.description || 'Pas de description'}</p>
-              <p class="prix">${p.prix.toLocaleString('fr-FR')} FCFA</p>
-              <p>En stock : ${p.stock} | Vendu par : ${p.vendeur?.nom || 'Vendeur'}</p>
-              <button onclick="ajouterAuPanier(${JSON.stringify(p).replace(/"/g, '&quot;')})" class="btn-blue">Ajouter au panier</button>
-            </div>
-          </div>
-        `).join('') : `<p>Aucun produit disponible pour le moment.</p>`;
-    }
-
-    function ajouterAuPanier(produit) {
-      const existant = panier.find(i => i.id === produit.id);
-      if (existant) {
-        if (existant.quantite >= produit.stock) return alert('❌ Stock insuffisant');
-        existant.quantite++;
-      } else {
-        panier.push({ ...produit, quantite: 1 });
-      }
-      afficherPanier();
-    }
-
-    function modifierQuantite(id, delta) {
-      const art = panier.find(i => i.id === id);
-      if (!art) return;
-      const nouvelleQte = art.quantite + delta;
-      if (nouvelleQte < 1) panier = panier.filter(i => i.id !== id);
-      else if (nouvelleQte > art.stock) return alert('❌ Stock insuffisant');
-      else art.quantite = nouvelleQte;
-      afficherPanier();
-    }
-
-    function afficherPanier() {
-      const total = panier.reduce((sum, a) => sum + a.prix * a.quantite, 0);
-      if (panier.length === 0) {
-        document.getElementById('contenu-panier').innerHTML = `<p>Votre panier est vide</p>`;
-        document.getElementById('montant-total').textContent = '0';
-        document.getElementById('form-paiement').classList.add('hidden');
-        return;
-      }
-      document.getElementById('contenu-panier').innerHTML = panier.map(a => `
-        <div class="ligne-panier">
-          <span>${a.nom}</span>
-          <span>
-            <button onclick="modifierQuantite(${a.id}, -1)">−</button>
-            ${a.quantite}
-            <button onclick="modifierQuantite(${a.id}, +1)">+</button>
-          </span>
-          <span>${(a.prix * a.quantite).toLocaleString('fr-FR')}</span>
-        </div>
-      `).join('');
-      document.getElementById('montant-total').textContent = total.toLocaleString('fr-FR');
-    }
-
-    function afficherFormPaiement() {
-      if (!token) return alert('⚠️ Veuillez vous connecter avant de commander');
-      if (panier.length === 0) return alert('⚠️ Panier vide');
-      document.getElementById('form-paiement').classList.remove('hidden');
-    }
-
-    function afficherInfosPaiement() {
-      const mode = document.getElementById('mode-paiement').value;
-      const bloc = document.getElementById('infos-paiement');
-      if (!mode) return bloc.classList.add('hidden');
-      bloc.innerHTML = `
-        <strong>Numéro de paiement :</strong><br>
-        ${mode.toUpperCase()} : <strong>${NUMEROS_RECEPTION[mode]}</strong><br>
-        <small>Vous recevrez une confirmation après validation</small>
-      `;
-      bloc.classList.remove('hidden');
-    }
-
-    async function confirmerPaiement() {
-      const mode = document.getElementById('mode-paiement').value;
-      const tel = document.getElementById('tel-client').value.trim();
-      const total = panier.reduce((s, a) => s + a.prix * a.quantite, 0);
-
-      if (!mode || !tel) return alert('❌ Remplissez tous les champs');
-
-      const res = await fetch('/api/commander', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          panier,
-          montant_total: total,
-          mode_paiement: mode,
-          telephone_client: tel
-        })
-      });
-
-      const result = await res.json();
-      if (result.ok) {
-        alert(`✅ Commande enregistrée !\n${result.message}`);
-        panier = [];
-        afficherPanier();
-        document.getElementById('form-paiement').classList.add('hidden');
-        document.getElementById('mode-paiement').value = '';
-        document.getElementById('tel-client').value = '';
-        afficherInfosPaiement();
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('utilisateur', JSON.stringify(data.utilisateur));
+        mettreAJourMenu();
+        afficherSection('accueil');
         chargerProduits();
-      } else {
-        alert(`❌ Erreur : ${result.erreur}`);
-      }
+    } catch (err) {
+        msg.className = 'message erreur';
+        msg.textContent = err.message;
     }
+}
 
-    async function chargerCommandes() {
-      if (!token) return;
-      const res = await fetch('/api/mes-commandes', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const commandes = await res.json();
-      document.getElementById('liste-commandes').innerHTML = commandes.length ?
-        commandes.map(c => `
-          <div style="border:1px solid #eee; padding:1rem; margin:1rem 0; border-radius:6px;">
-            <h4>Commande n°${c.id}</h4>
-            <p>Date : ${new Date(c.created_at).toLocaleString('fr-FR')}</p>
-            <p>Montant : <strong>${c.montant_total.toLocaleString('fr-FR')} FCFA</strong></p>
-            <p>Mode : ${c.mode_paiement?.toUpperCase() || 'Non précisé'}</p>
-            <p>Statut : <span class="statut ${c.statut}">${c.statut}</span></p>
-          </div>
-        `).join('') : `<p>Vous n'avez pas encore de commande.</p>`;
-    }
-
-    document.getElementById('form-produit').addEventListener('submit', async e => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const res = await fetch('/api/produits', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-      if (res.ok) {
-        alert('✅ Produit ajouté avec succès !');
-        e.target.reset();
-        chargerProduits();
-      } else alert('❌ Erreur lors de l\'ajout du produit');
-    });
-
-    majInterface();
+// Déconnexion
+function deconnecter() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('utilisateur');
+    mettreAJourMenu();
+    afficherSection('accueil');
     chargerProduits();
-  </script>
+}
+
+// Mise à jour du menu selon la connexion
+function mettreAJourMenu() {
+    const token = localStorage.getItem('token');
+    const utilisateur = JSON.parse(localStorage.getItem('utilisateur') || '{}');
+    document.getElementById('lienInscription').style.display = token ? 'none' : 'inline';
+    document.getElementById('lienConnexion').style.display = token ? 'none' : 'inline';
+    document.getElementById('lienDeconnexion').style.display = token ? 'inline' : 'none';
+    document.getElementById('lienVendeur').style.display = (token && utilisateur.role === 'commercant') ? 'inline' : 'none';
+    document.getElementById('lienCommandes').style.display = token ? 'inline' : 'none';
+}
+
+// Charger tous les produits
+async function chargerProduits() {
+    const conteneur = document.getElementById('listeProduits');
+    try {
+        const res = await fetch(`${API_URL}/api/produits`);
+        const produits = await res.json();
+        if (!res.ok) throw new Error('Impossible de charger les produits');
+
+        if (produits.length === 0) {
+            conteneur.innerHTML = '<p style="text-align:center; color:#666;">Aucun produit en vente pour le moment.</p>';
+            return;
+        }
+
+        conteneur.innerHTML = produits.map(p => `
+            <div class="carte-produit">
+                <img src="${p.image || 'https://via.placeholder.com/250x180?text=Pas+d%27image'}" alt="${p.nom}">
+                <h3>${p.nom}</h3>
+                <p class="prix">${p.prix.toLocaleString('fr-FR')} FCFA</p>
+                <p>${p.description.slice(0, 80)}...</p>
+                <p><strong>Stock :</strong> ${p.stock}</p>
+                <button onclick="ajouterAuPanier(${p.id}, '${p.nom}', ${p.prix})">Ajouter au panier</button>
+            </div>
+        `).join('');
+    } catch (err) {
+        conteneur.innerHTML = `<p class="message erreur">${err.message}</p>`;
+    }
+}
+
+// Ajouter produit (vendeur)
+async function ajouterProduit() {
+    const token = localStorage.getItem('token');
+    if (!token) return alert('Veuillez vous connecter en tant que commerçant');
+
+    const formData = new FormData();
+    formData.append('nom', document.getElementById('nomProduit').value.trim());
+    formData.append('description', document.getElementById('descriptionProduit').value.trim());
+    formData.append('prix', document.getElementById('prixProduit').value);
+    formData.append('stock', document.getElementById('stockProduit').value);
+    formData.append('categorie', document.getElementById('categorieProduit').value.trim());
+    formData.append('image', document.getElementById('imageProduit').files[0]);
+    const msg = document.getElementById('msgVendeur');
+
+    try {
+        const res = await fetch(`${API_URL}/api/produits`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.erreur || 'Erreur lors de l\'ajout');
+
+        msg.className = 'message succes';
+        msg.textContent = 'Produit ajouté avec succès !';
+        setTimeout(() => { afficherSection('accueil'); chargerProduits(); }, 1500);
+    } catch (err) {
+        msg.className = 'message erreur';
+        msg.textContent = err.message;
+    }
+}
+
+// Initialisation au chargement de la page
+window.onload = () => {
+    mettreAJourMenu();
+    chargerProduits();
+};
+</script>
+
 </body>
 </html>
