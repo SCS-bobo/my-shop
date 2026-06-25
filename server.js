@@ -2,8 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { createClient } = require('@supabase/supabase-js');
@@ -12,24 +10,18 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Connexion Supabase
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Dossier pour les images
-const dossierImages = path.join(__dirname, 'uploads');
-if (!fs.existsSync(dossierImages)) fs.mkdirSync(dossierImages);
-
-const stockage = multer.diskStorage({
-  destination: dossierImages,
-  filename: (req, file, cb) => {
-    const nomUnique = Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
-    cb(null, nomUnique);
-  }
-});
-const upload = multer({ storage: stockage });
+// Multer : stockage temporaire en mémoire
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 // Middleware d'authentification
 const auth = (req, res, next) => {
@@ -85,7 +77,7 @@ app.post('/api/connexion', async (req, res) => {
   }
 });
 
-// --- Produits ---
+// --- Produits avec stockage Supabase ---
 app.get('/api/produits', async (req, res) => {
   const { data, error } = await supabase
     .from('produits')
@@ -100,7 +92,29 @@ app.post('/api/produits', auth, upload.single('image'), async (req, res) => {
   }
 
   const { nom, description, prix, stock, categorie } = req.body;
-  const image = req.file ? `/uploads/${req.file.filename}` : null;
+  let imageUrl = null;
+
+  // Envoyer l'image vers Supabase Storage
+  if (req.file) {
+    const nomFichier = `${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
+    const { data: uploadData, error: uploadError } = await supabase
+      .storage
+      .from('produits-images')
+      .upload(nomFichier, req.file.buffer, {
+        contentType: req.file.mimetype,
+        cacheControl: '3600'
+      });
+
+    if (uploadError) return res.status(500).json({ erreur: 'Erreur upload image : ' + uploadError.message });
+
+    // Récupérer l'URL publique
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('produits-images')
+      .getPublicUrl(nomFichier);
+
+    imageUrl = publicUrl;
+  }
 
   const { data, error } = await supabase
     .from('produits')
@@ -110,7 +124,7 @@ app.post('/api/produits', auth, upload.single('image'), async (req, res) => {
       prix: Number(prix),
       stock: Number(stock),
       categorie,
-      image,
+      image: imageUrl,
       vendeur_id: req.user.id
     }])
     .select();
@@ -124,7 +138,6 @@ app.post('/api/commander', auth, async (req, res) => {
   try {
     const { panier, montant_total, mode_paiement, telephone_client } = req.body;
 
-    // Vérifier le stock avant tout
     for (const article of panier) {
       const { data: produit } = await supabase
         .from('produits')
@@ -136,7 +149,6 @@ app.post('/api/commander', auth, async (req, res) => {
       }
     }
 
-    // Récupérer le numéro de réception selon le mode
     const numerosReception = {
       orange: process.env.ORANGE_MONEY_RECEIVER,
       mtn: process.env.MTN_MOMO_RECEIVER,
@@ -144,7 +156,6 @@ app.post('/api/commander', auth, async (req, res) => {
     };
     const numeroReception = numerosReception[mode_paiement];
 
-    // Créer la commande
     const { data: commande, error: errCmd } = await supabase
       .from('commandes')
       .insert([{
@@ -159,7 +170,6 @@ app.post('/api/commander', auth, async (req, res) => {
 
     if (errCmd) throw errCmd;
 
-    // Ajouter les lignes de commande
     const lignes = panier.map(art => ({
       commande_id: commande.id,
       produit_id: art.id,
@@ -170,7 +180,6 @@ app.post('/api/commander', auth, async (req, res) => {
     const { error: errLignes } = await supabase.from('lignes_commande').insert(lignes);
     if (errLignes) throw errLignes;
 
-    // Mettre à jour le stock
     for (const art of panier) {
       await supabase
         .from('produits')
@@ -178,7 +187,6 @@ app.post('/api/commander', auth, async (req, res) => {
         .eq('id', art.id);
     }
 
-    // ✅ Mode simulation pour l'instant
     setTimeout(async () => {
       await supabase.from('commandes').update({ statut: 'payee' }).eq('id', commande.id);
     }, 3000);
@@ -195,7 +203,6 @@ app.post('/api/commander', auth, async (req, res) => {
   }
 });
 
-// --- Mes commandes ---
 app.get('/api/mes-commandes', auth, async (req, res) => {
   const { data, error } = await supabase
     .from('commandes')
@@ -206,9 +213,5 @@ app.get('/api/mes-commandes', auth, async (req, res) => {
   res.json(data);
 });
 
-// Servir les fichiers statiques
-app.use('/uploads', express.static(dossierImages));
-app.use(express.static(__dirname));
-
 // Lancer le serveur
-app.listen(PORT, () => console.log(`✅ Serveur démarré sur http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`✅ Serveur démarré sur le port ${PORT}`));
