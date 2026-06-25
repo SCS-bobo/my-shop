@@ -16,15 +16,20 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
-// Autoriser les accès et lire les données
-app.use(cors());
+// ✅ CORS ouvert pour TOUS les appareils
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 📌 Servir les fichiers de ton site (index.html, CSS, JS...)
+// ✅ Servir les fichiers statiques
 app.use(express.static(path.join(__dirname)));
 
-// Multer : stockage temporaire en mémoire pour les images
+// Multer : stockage temporaire en mémoire
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
@@ -40,7 +45,7 @@ const auth = (req, res, next) => {
   }
 };
 
-// 📌 Page d'accueil par défaut
+// ✅ Page d'accueil
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
