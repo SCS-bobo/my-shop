@@ -6,8 +6,8 @@
     <title>My Shop - Place de marché</title>
     <script>
         const API_URL = "https://my-shop-9j3j.onrender.com";
-        const MAX_ATTEMPTS = 8;           // Plus d'essais
-        const DELAY_BETWEEN = 25000;      // 25 secondes entre chaque essai
+        const MAX_PING = 8;
+        const DELAY_PING = 20000;
     </script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
@@ -23,10 +23,7 @@
         input, select, textarea { width: 100%; padding: 0.8rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; }
         button { width: 100%; padding: 0.9rem; background: #27ae60; color: white; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; font-weight: bold; }
         button:hover { background: #219653; }
-        .produits-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
-        .carte-produit { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-        .carte-produit img { width: 100%; height: 180px; object-fit: cover; border-radius: 4px; margin-bottom: 1rem; }
-        .prix { font-size: 1.3rem; font-weight: bold; color: #e67e22; margin: 0.5rem 0; }
+        button:disabled { background: #95a5a6; cursor: not-allowed; }
         .message { padding: 1.2rem; margin: 1rem 0; border-radius: 6px; text-align: center; font-size: 1.05rem; }
         .succes { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .erreur { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
@@ -54,7 +51,7 @@
     <section id="accueil" class="section active">
         <h2>Bienvenue sur My Shop</h2>
         <p style="text-align:center; margin-bottom:2rem;">Votre place de marché en Côte d'Ivoire — achetez et vendez en toute simplicité !</p>
-        <div id="statutChargement" class="message info">⏳ Le serveur se réveille, veuillez patienter jusqu'à 2 minutes...</div>
+        <div id="statutPing" class="message info">⏳ Réveil du serveur en cours...</div>
         <div id="listeProduits" class="produits-grid"></div>
     </section>
 
@@ -69,7 +66,7 @@
             <option value="client">Client (pour acheter)</option>
             <option value="commercant">Commerçant (pour vendre)</option>
         </select>
-        <button onclick="inscrire()">Créer mon compte</button>
+        <button id="btnInscription" onclick="inscrire()">Créer mon compte</button>
     </section>
 
     <section id="connexion" class="section">
@@ -77,7 +74,7 @@
         <div id="msgConnexion"></div>
         <input type="email" id="emailCo" placeholder="Adresse email" required>
         <input type="password" id="motDePasseCo" placeholder="Mot de passe" required>
-        <button onclick="connecter()">Se connecter</button>
+        <button id="btnConnexion" onclick="connecter()">Se connecter</button>
     </section>
 
     <section id="espaceVendeur" class="section">
@@ -100,102 +97,105 @@
 </div>
 
 <script>
+let serveurPret = false;
+
 function afficherSection(id) {
     document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
     document.getElementById(id).classList.add('active');
     document.querySelectorAll('.message').forEach(msg => msg.textContent = '');
 }
 
-async function fetchAvecAttente(url, options = {}, tentative = 1) {
+async function verifierServeur(tentative = 1) {
     try {
-        const res = await fetch(url, {
-            ...options,
-            headers: { 'Content-Type': 'application/json', ...options.headers }
-        });
-        if (!res.ok) throw new Error(`Statut ${res.status}`);
-        return await res.json();
-    } catch (err) {
-        if (tentative < MAX_ATTEMPTS) {
-            document.getElementById('statutChargement').textContent = `⏳ Tentative ${tentative}/${MAX_ATTEMPTS} : serveur en démarrage...`;
-            await new Promise(r => setTimeout(r, DELAY_BETWEEN));
-            return fetchAvecAttente(url, options, tentative + 1);
+        const res = await fetch(`${API_URL}/api/ping`);
+        if (res.ok) {
+            serveurPret = true;
+            document.getElementById('statutPing').textContent = "✅ Serveur prêt, vous pouvez utiliser le site";
+            document.getElementById('statutPing').className = "message succes";
+            document.getElementById('btnInscription').disabled = false;
+            document.getElementById('btnConnexion').disabled = false;
+            chargerProduits();
+            return true;
         }
-        throw new Error(`Le serveur a mis trop de temps à répondre. Rafraîchissez la page dans 1 minute.`);
+    } catch (err) {}
+
+    if (tentative < MAX_PING) {
+        document.getElementById('statutPing').textContent = `⏳ Tentative ${tentative}/${MAX_PING} : serveur en démarrage...`;
+        await new Promise(r => setTimeout(r, DELAY_PING));
+        return verifierServeur(tentative + 1);
     }
+
+    document.getElementById('statutPing').textContent = "❌ Serveur trop lent. Rafraîchissez la page dans 1 minute.";
+    document.getElementById('statutPing').className = "message erreur";
+    return false;
+}
+
+async function fetchApi(url, options = {}) {
+    if (!serveurPret) await verifierServeur();
+    const res = await fetch(url, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...options.headers }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erreur || "Erreur inconnue");
+    return data;
 }
 
 async function chargerProduits() {
-    const conteneur = document.getElementById('listeProduits');
-    const statut = document.getElementById('statutChargement');
     try {
-        const produits = await fetchAvecAttente(`${API_URL}/api/produits`);
-        statut.style.display = 'none';
-        if (produits.length === 0) {
-            conteneur.innerHTML = '<p style="text-align:center; color:#666;">Aucun produit en vente pour le moment.</p>';
-            return;
-        }
-        conteneur.innerHTML = produits.map(p => `
-            <div class="carte-produit">
-                <img src="${p.image || 'https://via.placeholder.com/250x180?text=Pas+d%27image'}" alt="${p.nom}">
-                <h3>${p.nom}</h3>
-                <p class="prix">${p.prix.toLocaleString('fr-FR')} FCFA</p>
-                <p>${p.description.slice(0, 80)}...</p>
-                <p><strong>Stock :</strong> ${p.stock}</p>
-            </div>
-        `).join('');
+        const produits = await fetchApi(`${API_URL}/api/produits`);
+        document.getElementById('listeProduits').innerHTML = produits.length
+            ? produits.map(p => `<div class="carte-produit"><h3>${p.nom}</h3><p class="prix">${p.prix} FCFA</p></div>`).join('')
+            : '<p>Aucun produit</p>';
     } catch (err) {
-        statut.className = 'message erreur';
-        statut.textContent = err.message;
+        document.getElementById('listeProduits').innerHTML = `<p class="erreur">${err.message}</p>`;
     }
 }
 
 async function inscrire() {
-    const nom = document.getElementById('nom').value.trim();
-    const email = document.getElementById('email').value.trim();
-    const tel = document.getElementById('telephone').value.trim();
-    const mdp = document.getElementById('motDePasse').value;
-    const role = document.getElementById('role').value;
     const msg = document.getElementById('msgInscription');
+    msg.textContent = "⏳ Envoi en cours...";
+    msg.className = "message info";
     try {
-        const data = await fetchAvecAttente(`${API_URL}/api/inscription`, {
+        const data = await fetchApi(`${API_URL}/api/inscription`, {
             method: 'POST',
-            body: JSON.stringify({ nom, email, telephone: tel, motDePasse: mdp, role })
+            body: JSON.stringify({
+                nom: document.getElementById('nom').value.trim(),
+                email: document.getElementById('email').value.trim(),
+                telephone: document.getElementById('telephone').value.trim(),
+                motDePasse: document.getElementById('motDePasse').value,
+                role: document.getElementById('role').value
+            })
         });
-        msg.className = 'message succes';
-        msg.textContent = 'Compte créé ! Vous pouvez vous connecter.';
+        msg.className = "message succes";
+        msg.textContent = "✅ Compte créé ! Vous pouvez vous connecter.";
         setTimeout(() => afficherSection('connexion'), 1500);
     } catch (err) {
-        msg.className = 'message erreur';
-        msg.textContent = err.message;
+        msg.className = "message erreur";
+        msg.textContent = `❌ ${err.message}`;
     }
 }
 
 async function connecter() {
-    const email = document.getElementById('emailCo').value.trim();
-    const mdp = document.getElementById('motDePasseCo').value;
     const msg = document.getElementById('msgConnexion');
+    msg.textContent = "⏳ Connexion en cours...";
+    msg.className = "message info";
     try {
-        const data = await fetchAvecAttente(`${API_URL}/api/connexion`, {
+        const data = await fetchApi(`${API_URL}/api/connexion`, {
             method: 'POST',
-            body: JSON.stringify({ email, motDePasse: mdp })
+            body: JSON.stringify({
+                email: document.getElementById('emailCo').value.trim(),
+                motDePasse: document.getElementById('motDePasseCo').value
+            })
         });
         localStorage.setItem('token', data.token);
         localStorage.setItem('utilisateur', JSON.stringify(data.utilisateur));
         mettreAJourMenu();
         afficherSection('accueil');
-        chargerProduits();
     } catch (err) {
-        msg.className = 'message erreur';
-        msg.textContent = err.message;
+        msg.className = "message erreur";
+        msg.textContent = `❌ ${err.message}`;
     }
-}
-
-function deconnecter() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('utilisateur');
-    mettreAJourMenu();
-    afficherSection('accueil');
-    chargerProduits();
 }
 
 function mettreAJourMenu() {
@@ -208,9 +208,16 @@ function mettreAJourMenu() {
     document.getElementById('lienCommandes').style.display = token ? 'inline' : 'none';
 }
 
+function deconnecter() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('utilisateur');
+    mettreAJourMenu();
+    afficherSection('accueil');
+}
+
 window.onload = () => {
     mettreAJourMenu();
-    chargerProduits();
+    verifierServeur();
 };
 </script>
 
