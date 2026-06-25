@@ -2,12 +2,12 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <!-- Important pour l'affichage sur mobile -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Shop - Place de marché</title>
     <script>
-        // ✅ ADRESSE CORRIGÉE : plus de localhost, ton vrai site en ligne
         const API_URL = "https://my-shop-9j3j.onrender.com";
+        const MAX_ATTEMPTS = 5;
+        const DELAY_BETWEEN = 20000; // 20 secondes entre chaque essai
     </script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
@@ -30,6 +30,7 @@
         .message { padding: 1rem; margin: 1rem 0; border-radius: 4px; text-align: center; }
         .succes { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .erreur { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #e3f2fd; color: #0c5460; border: 1px solid #bee5eb; }
         .deconnexion { background: #e74c3c; }
         .deconnexion:hover { background: #c0392b; }
     </style>
@@ -50,14 +51,13 @@
 
 <div class="container">
 
-    <!-- ACCUEIL -->
     <section id="accueil" class="section active">
         <h2>Bienvenue sur My Shop</h2>
         <p style="text-align:center; margin-bottom:2rem;">Votre place de marché en Côte d'Ivoire — achetez et vendez en toute simplicité !</p>
+        <div id="statutChargement" class="message info">⏳ Le serveur se réveille, veuillez patienter 30 à 60 secondes...</div>
         <div id="listeProduits" class="produits-grid"></div>
     </section>
 
-    <!-- INSCRIPTION -->
     <section id="inscription" class="section">
         <h2>Créer mon compte</h2>
         <div id="msgInscription"></div>
@@ -72,7 +72,6 @@
         <button onclick="inscrire()">Créer mon compte</button>
     </section>
 
-    <!-- CONNEXION -->
     <section id="connexion" class="section">
         <h2>Me connecter</h2>
         <div id="msgConnexion"></div>
@@ -81,7 +80,6 @@
         <button onclick="connecter()">Se connecter</button>
     </section>
 
-    <!-- ESPACE VENDEUR -->
     <section id="espaceVendeur" class="section">
         <h2>Ajouter un nouveau produit</h2>
         <div id="msgVendeur"></div>
@@ -94,7 +92,6 @@
         <button onclick="ajouterProduit()">Enregistrer le produit</button>
     </section>
 
-    <!-- MES COMMANDES -->
     <section id="mesCommandes" class="section">
         <h2>Mes commandes</h2>
         <div id="listeCommandes"></div>
@@ -103,14 +100,55 @@
 </div>
 
 <script>
-// Affichage des sections
 function afficherSection(id) {
     document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
     document.getElementById(id).classList.add('active');
     document.querySelectorAll('.message').forEach(msg => msg.textContent = '');
 }
 
-// Inscription
+async function fetchAvecAttente(url, options = {}, tentative = 1) {
+    try {
+        const res = await fetch(url, {
+            ...options,
+            headers: { 'Content-Type': 'application/json', ...options.headers }
+        });
+        if (!res.ok) throw new Error(`Statut ${res.status}`);
+        return await res.json();
+    } catch (err) {
+        if (tentative < MAX_ATTEMPTS) {
+            document.getElementById('statutChargement').textContent = `⏳ Tentative ${tentative}/${MAX_ATTEMPTS} : serveur en démarrage...`;
+            await new Promise(r => setTimeout(r, DELAY_BETWEEN));
+            return fetchAvecAttente(url, options, tentative + 1);
+        }
+        throw new Error(`Le serveur n'a pas répondu après ${MAX_ATTEMPTS} essais. Réessayez dans 1 minute.`);
+    }
+}
+
+async function chargerProduits() {
+    const conteneur = document.getElementById('listeProduits');
+    const statut = document.getElementById('statutChargement');
+    try {
+        const produits = await fetchAvecAttente(`${API_URL}/api/produits`);
+        statut.style.display = 'none';
+        if (produits.length === 0) {
+            conteneur.innerHTML = '<p style="text-align:center; color:#666;">Aucun produit en vente pour le moment.</p>';
+            return;
+        }
+        conteneur.innerHTML = produits.map(p => `
+            <div class="carte-produit">
+                <img src="${p.image || 'https://via.placeholder.com/250x180?text=Pas+d%27image'}" alt="${p.nom}">
+                <h3>${p.nom}</h3>
+                <p class="prix">${p.prix.toLocaleString('fr-FR')} FCFA</p>
+                <p>${p.description.slice(0, 80)}...</p>
+                <p><strong>Stock :</strong> ${p.stock}</p>
+            </div>
+        `).join('');
+    } catch (err) {
+        statut.className = 'message erreur';
+        statut.textContent = err.message;
+    }
+}
+
 async function inscrire() {
     const nom = document.getElementById('nom').value.trim();
     const email = document.getElementById('email').value.trim();
@@ -118,18 +156,13 @@ async function inscrire() {
     const mdp = document.getElementById('motDePasse').value;
     const role = document.getElementById('role').value;
     const msg = document.getElementById('msgInscription');
-
     try {
-        const res = await fetch(`${API_URL}/api/inscription`, {
+        const data = await fetchAvecAttente(`${API_URL}/api/inscription`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nom, email, telephone: tel, motDePasse: mdp, role })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.erreur || 'Erreur lors de la création');
-
         msg.className = 'message succes';
-        msg.textContent = 'Compte créé avec succès ! Vous pouvez vous connecter.';
+        msg.textContent = 'Compte créé ! Vous pouvez vous connecter.';
         setTimeout(() => afficherSection('connexion'), 1500);
     } catch (err) {
         msg.className = 'message erreur';
@@ -137,21 +170,15 @@ async function inscrire() {
     }
 }
 
-// Connexion
 async function connecter() {
     const email = document.getElementById('emailCo').value.trim();
     const mdp = document.getElementById('motDePasseCo').value;
     const msg = document.getElementById('msgConnexion');
-
     try {
-        const res = await fetch(`${API_URL}/api/connexion`, {
+        const data = await fetchAvecAttente(`${API_URL}/api/connexion`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, motDePasse: mdp })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.erreur || 'Identifiants incorrects');
-
         localStorage.setItem('token', data.token);
         localStorage.setItem('utilisateur', JSON.stringify(data.utilisateur));
         mettreAJourMenu();
@@ -163,7 +190,6 @@ async function connecter() {
     }
 }
 
-// Déconnexion
 function deconnecter() {
     localStorage.removeItem('token');
     localStorage.removeItem('utilisateur');
@@ -172,7 +198,6 @@ function deconnecter() {
     chargerProduits();
 }
 
-// Mise à jour du menu selon la connexion
 function mettreAJourMenu() {
     const token = localStorage.getItem('token');
     const utilisateur = JSON.parse(localStorage.getItem('utilisateur') || '{}');
@@ -183,67 +208,6 @@ function mettreAJourMenu() {
     document.getElementById('lienCommandes').style.display = token ? 'inline' : 'none';
 }
 
-// Charger tous les produits
-async function chargerProduits() {
-    const conteneur = document.getElementById('listeProduits');
-    try {
-        const res = await fetch(`${API_URL}/api/produits`);
-        const produits = await res.json();
-        if (!res.ok) throw new Error('Impossible de charger les produits');
-
-        if (produits.length === 0) {
-            conteneur.innerHTML = '<p style="text-align:center; color:#666;">Aucun produit en vente pour le moment.</p>';
-            return;
-        }
-
-        conteneur.innerHTML = produits.map(p => `
-            <div class="carte-produit">
-                <img src="${p.image || 'https://via.placeholder.com/250x180?text=Pas+d%27image'}" alt="${p.nom}">
-                <h3>${p.nom}</h3>
-                <p class="prix">${p.prix.toLocaleString('fr-FR')} FCFA</p>
-                <p>${p.description.slice(0, 80)}...</p>
-                <p><strong>Stock :</strong> ${p.stock}</p>
-                <button onclick="ajouterAuPanier(${p.id}, '${p.nom}', ${p.prix})">Ajouter au panier</button>
-            </div>
-        `).join('');
-    } catch (err) {
-        conteneur.innerHTML = `<p class="message erreur">${err.message}</p>`;
-    }
-}
-
-// Ajouter produit (vendeur)
-async function ajouterProduit() {
-    const token = localStorage.getItem('token');
-    if (!token) return alert('Veuillez vous connecter en tant que commerçant');
-
-    const formData = new FormData();
-    formData.append('nom', document.getElementById('nomProduit').value.trim());
-    formData.append('description', document.getElementById('descriptionProduit').value.trim());
-    formData.append('prix', document.getElementById('prixProduit').value);
-    formData.append('stock', document.getElementById('stockProduit').value);
-    formData.append('categorie', document.getElementById('categorieProduit').value.trim());
-    formData.append('image', document.getElementById('imageProduit').files[0]);
-    const msg = document.getElementById('msgVendeur');
-
-    try {
-        const res = await fetch(`${API_URL}/api/produits`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-            body: formData
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.erreur || 'Erreur lors de l\'ajout');
-
-        msg.className = 'message succes';
-        msg.textContent = 'Produit ajouté avec succès !';
-        setTimeout(() => { afficherSection('accueil'); chargerProduits(); }, 1500);
-    } catch (err) {
-        msg.className = 'message erreur';
-        msg.textContent = err.message;
-    }
-}
-
-// Initialisation au chargement de la page
 window.onload = () => {
     mettreAJourMenu();
     chargerProduits();
