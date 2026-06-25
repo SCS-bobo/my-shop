@@ -5,6 +5,7 @@ const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { createClient } = require('@supabase/supabase-js');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,11 +16,15 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
+// Autoriser les accès et lire les données
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Multer : stockage temporaire en mémoire
+// 📌 Servir les fichiers de ton site (index.html, CSS, JS...)
+app.use(express.static(path.join(__dirname)));
+
+// Multer : stockage temporaire en mémoire pour les images
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
@@ -34,6 +39,11 @@ const auth = (req, res, next) => {
     return res.status(401).json({ erreur: 'Token invalide ou expiré' });
   }
 };
+
+// 📌 Page d'accueil par défaut
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // --- Inscription / Connexion ---
 app.post('/api/inscription', async (req, res) => {
@@ -94,7 +104,6 @@ app.post('/api/produits', auth, upload.single('image'), async (req, res) => {
   const { nom, description, prix, stock, categorie } = req.body;
   let imageUrl = null;
 
-  // Envoyer l'image vers Supabase Storage
   if (req.file) {
     const nomFichier = `${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
     const { data: uploadData, error: uploadError } = await supabase
@@ -107,7 +116,6 @@ app.post('/api/produits', auth, upload.single('image'), async (req, res) => {
 
     if (uploadError) return res.status(500).json({ erreur: 'Erreur upload image : ' + uploadError.message });
 
-    // Récupérer l'URL publique
     const { data: { publicUrl } } = supabase
       .storage
       .from('produits-images')
@@ -136,14 +144,10 @@ app.post('/api/produits', auth, upload.single('image'), async (req, res) => {
 // --- Commandes & Paiements ---
 app.post('/api/commander', auth, async (req, res) => {
   try {
-    const { panier, montant_total, mode_paiement, telephone_client } = req.body;
+    const { panier, montant_total, mode_paiement } = req.body;
 
     for (const article of panier) {
-      const { data: produit } = await supabase
-        .from('produits')
-        .select('stock')
-        .eq('id', article.id)
-        .single();
+      const { data: produit } = await supabase.from('produits').select('stock').eq('id', article.id).single();
       if (!produit || produit.stock < article.quantite) {
         return res.status(400).json({ erreur: `Stock insuffisant pour ${article.nom}` });
       }
@@ -181,21 +185,14 @@ app.post('/api/commander', auth, async (req, res) => {
     if (errLignes) throw errLignes;
 
     for (const art of panier) {
-      await supabase
-        .from('produits')
-        .update({ stock: supabase.raw('stock - ?', [art.quantite]) })
-        .eq('id', art.id);
+      await supabase.from('produits').update({ stock: supabase.raw('stock - ?', [art.quantite]) }).eq('id', art.id);
     }
-
-    setTimeout(async () => {
-      await supabase.from('commandes').update({ statut: 'payee' }).eq('id', commande.id);
-    }, 3000);
 
     res.status(201).json({
       ok: true,
       commande_id: commande.id,
-      numero_reception: numeroReception,
-      message: `Demande envoyée : veuillez envoyer ${montant_total.toLocaleString('fr-FR')} FCFA au ${numeroReception} via ${mode_paiement.toUpperCase()}`
+      numero_reception,
+      message: `Veuillez envoyer ${montant_total.toLocaleString('fr-FR')} FCFA au ${numeroReception} via ${mode_paiement.toUpperCase()}`
     });
 
   } catch (err) {
@@ -214,4 +211,4 @@ app.get('/api/mes-commandes', auth, async (req, res) => {
 });
 
 // Lancer le serveur
-app.listen(PORT, () => console.log(`✅ Serveur démarré sur le port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Serveur opérationnel sur le port ${PORT}`));
