@@ -5,26 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Shop</title>
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; font-family:Arial; }
+    * { margin:0; padding:0; box-sizing:border-box; font-family:Arial, sans-serif; }
     body { background:#f8f9fa; }
     header { background:#2c3e50; color:white; padding:1rem 5%; display:flex; justify-content:space-between; align-items:center; }
-    nav a { color:white; margin-left:1rem; text-decoration:none; }
+    nav a { color:white; margin-left:1rem; text-decoration:none; font-weight:500; }
     .container { max-width:700px; margin:2rem auto; padding:0 5%; }
-    .section { background:white; padding:2rem; border-radius:8px; box-shadow:0 2px 10px #0002; display:none; }
+    .section { background:white; padding:2rem; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); display:none; }
     .active { display:block; }
     h2 { text-align:center; margin-bottom:1.5rem; color:#2c3e50; }
     input, select { width:100%; padding:0.9rem; margin-bottom:1rem; border:1px solid #ddd; border-radius:4px; font-size:1rem; }
-    button { width:100%; padding:1rem; background:#27ae60; color:white; border:none; border-radius:4px; font-size:1.1rem; cursor:pointer; }
-    .msg { padding:1rem; margin:1rem 0; border-radius:4px; text-align:center; }
-    .info { background:#e3f2fd; color:#0c5460; }
-    .ok { background:#d4edda; color:#155724; }
-    .err { background:#f8d7da; color:#721c24; }
+    button { width:100%; padding:1rem; background:#27ae60; color:white; border:none; border-radius:4px; font-size:1.1rem; font-weight:bold; cursor:pointer; }
+    button:disabled { background:#95a5a6; cursor:not-allowed; }
+    .msg { padding:1rem; margin:1rem 0; border-radius:4px; text-align:center; font-size:1rem; }
+    .info { background:#e3f2fd; color:#0c5460; border:1px solid #bee5eb; }
+    .ok { background:#d4edda; color:#155724; border:1px solid #c3e6cb; }
+    .err { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
   </style>
 </head>
 <body>
 
 <header>
-  <div>🛒 My Shop</div>
+  <div class="logo">🛒 My Shop</div>
   <nav>
     <a href="#" onclick="show('accueil')">Accueil</a>
     <a href="#" onclick="show('inscription')">S'inscrire</a>
@@ -35,17 +36,17 @@
 <div class="container">
   <section id="accueil" class="section active">
     <h2>Bienvenue sur My Shop</h2>
-    <div id="statut" class="msg info">⏳ Chargement...</div>
+    <div id="statut" class="msg info">⏳ Chargement du serveur...</div>
     <div id="produits"></div>
   </section>
 
   <section id="inscription" class="section">
     <h2>Créer mon compte</h2>
     <div id="msgInsc"></div>
-    <input type="text" id="nom" placeholder="Nom complet">
-    <input type="email" id="email" placeholder="Email">
-    <input type="tel" id="tel" placeholder="Téléphone">
-    <input type="password" id="mdp" placeholder="Mot de passe">
+    <input type="text" id="nom" placeholder="Nom complet" required>
+    <input type="email" id="email" placeholder="Adresse email" required>
+    <input type="tel" id="tel" placeholder="Numéro de téléphone" required>
+    <input type="password" id="mdp" placeholder="Mot de passe" required>
     <select id="role">
       <option value="client">Client</option>
       <option value="commercant">Commerçant</option>
@@ -56,14 +57,14 @@
   <section id="connexion" class="section">
     <h2>Me connecter</h2>
     <div id="msgCo"></div>
-    <input type="email" id="emailCo" placeholder="Email">
-    <input type="password" id="mdpCo" placeholder="Mot de passe">
+    <input type="email" id="emailCo" placeholder="Adresse email" required>
+    <input type="password" id="mdpCo" placeholder="Mot de passe" required>
     <button onclick="connecter()">Se connecter</button>
   </section>
 </div>
 
 <script>
-const API = "https://my-shop-9l3j.onrender.com";
+let API = window.location.origin;
 let pret = false;
 
 function show(id) {
@@ -76,7 +77,7 @@ async function verifier(essai = 1) {
     const res = await fetch(`${API}/ping`, { cache: 'no-store' });
     if (res.ok) {
       pret = true;
-      document.getElementById('statut').textContent = "✅ Serveur prêt !";
+      document.getElementById('statut').textContent = "✅ Serveur prêt ! Vous pouvez utiliser le site.";
       document.getElementById('statut').className = "msg ok";
       chargerProduits();
       return;
@@ -86,10 +87,10 @@ async function verifier(essai = 1) {
   setTimeout(() => verifier(essai + 1), 3000);
 }
 
-// ✅ Appel avec 3 tentatives automatiques
 async function appel(url, opt = {}) {
   while (!pret) await new Promise(r => setTimeout(r, 500));
-  for (let i = 0; i < 3; i++) {
+  const maxEssais = 3;
+  for (let i = 0; i < maxEssais; i++) {
     try {
       const res = await fetch(url, {
         ...opt,
@@ -101,19 +102,21 @@ async function appel(url, opt = {}) {
     } catch {}
     await new Promise(r => setTimeout(r, 1500));
   }
-  throw new Error("Réessayez, le réseau est lent");
+  throw new Error("Réessayez, connexion un peu lente");
 }
 
 async function chargerProduits() {
   try {
     const data = await appel(`${API}/api/produits`);
-    document.getElementById('produits').innerHTML = data.length ? data.map(p => `<div style="padding:1rem; margin:1rem 0; background:white; border-radius:6px; box-shadow:0 1px 3px #0002;"><h4>${p.nom}</h4><p style="color:#e67e22; font-weight:bold;">${p.prix} FCFA</p></div>`).join('') : "<p style='text-align:center; color:#666;'>Aucun produit</p>";
+    document.getElementById('produits').innerHTML = data.length 
+      ? data.map(p => `<div style="padding:1rem; margin:1rem 0; background:#fff; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1);"><h4>${p.nom}</h4><p style="color:#e67e22; font-weight:bold; font-size:1.1rem;">${p.prix.toLocaleString('fr-FR')} FCFA</p></div>`).join('')
+      : "<p style='text-align:center; color:#666; margin-top:2rem;'>Aucun produit en vente pour le moment.</p>";
   } catch {}
 }
 
 async function inscrire() {
   const msg = document.getElementById('msgInsc');
-  msg.className = "msg info"; msg.textContent = "Envoi en cours...";
+  msg.className = "msg info"; msg.textContent = "⏳ Envoi en cours...";
   try {
     const res = await appel(`${API}/api/inscription`, {
       method: 'POST',
@@ -126,8 +129,8 @@ async function inscrire() {
       })
     });
     if (res.erreur) throw new Error(res.erreur);
-    msg.className = "msg ok"; msg.textContent = "✅ Compte créé !";
-    setTimeout(() => show('connexion'), 1500);
+    msg.className = "msg ok"; msg.textContent = "✅ Compte créé avec succès ! Vous pouvez vous connecter.";
+    setTimeout(() => show('connexion'), 2000);
   } catch (e) {
     msg.className = "msg err"; msg.textContent = `❌ ${e.message}`;
   }
@@ -135,7 +138,7 @@ async function inscrire() {
 
 async function connecter() {
   const msg = document.getElementById('msgCo');
-  msg.className = "msg info"; msg.textContent = "Vérification...";
+  msg.className = "msg info"; msg.textContent = "⏳ Vérification en cours...";
   try {
     const res = await appel(`${API}/api/connexion`, {
       method: 'POST',
@@ -146,7 +149,7 @@ async function connecter() {
     });
     if (res.erreur) throw new Error(res.erreur);
     localStorage.setItem('token', res.token);
-    msg.className = "msg ok"; msg.textContent = "✅ Connecté !";
+    msg.className = "msg ok"; msg.textContent = "✅ Connexion réussie ! Bienvenue.";
   } catch (e) {
     msg.className = "msg err"; msg.textContent = `❌ ${e.message}`;
   }
@@ -154,3 +157,6 @@ async function connecter() {
 
 window.onload = verifier;
 </script>
+
+</body>
+</html>
