@@ -6,10 +6,9 @@
     <title>My Shop</title>
     <script>
         const API_URL = "https://my-shop-9j3j.onrender.com";
-        // Attente illimitée : on ne s'arrête jamais
-        const DELAY_PING = 12000; // 12 secondes entre chaque essai
+        const DELAY = 10000; // 10s entre chaque essai
         let serveurPret = false;
-        let tentative = 1;
+        let essai = 1;
     </script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
@@ -42,7 +41,7 @@
 <div class="container">
     <section id="accueil" class="section active">
         <h2>Bienvenue sur My Shop</h2>
-        <div id="statutServeur" class="message info">⏳ Le serveur se réveille, veuillez patienter quelques instants...</div>
+        <div id="statut" class="message info">⏳ Démarrage du serveur en cours... Veuillez patienter</div>
         <div id="listeProduits"></div>
     </section>
 
@@ -54,8 +53,8 @@
         <input type="tel" id="telephone" placeholder="Numéro de téléphone" required>
         <input type="password" id="motDePasse" placeholder="Mot de passe" required>
         <select id="role">
-            <option value="client">Client (pour acheter)</option>
-            <option value="commercant">Commerçant (pour vendre)</option>
+            <option value="client">Client</option>
+            <option value="commercant">Commerçant</option>
         </select>
         <button id="btnInscription" onclick="inscrire()" disabled>Créer mon compte</button>
     </section>
@@ -76,68 +75,46 @@ function afficher(id) {
     document.querySelectorAll('.message').forEach(m => m.textContent = '');
 }
 
-// Vérification du serveur : tourne sans s'arrêter jusqu'à réponse
+// Vérification sans limite, sans erreur rouge
 async function verifierServeur() {
     try {
-        const res = await fetch(`${API_URL}/api/ping`, { method: 'GET', cache: 'no-store' });
+        const res = await fetch(`${API_URL}/ping`, { cache: 'no-store' });
         if (res.ok) {
             serveurPret = true;
-            document.getElementById('statutServeur').textContent = "✅ Serveur prêt ! Vous pouvez utiliser le site normalement.";
-            document.getElementById('statutServeur').className = "message succes";
+            document.getElementById('statut').textContent = "✅ Serveur prêt ! Vous pouvez utiliser le site.";
+            document.getElementById('statut').className = "message succes";
             document.getElementById('btnInscription').disabled = false;
             document.getElementById('btnConnexion').disabled = false;
             chargerProduits();
             return;
         }
-    } catch (err) {}
+    } catch {}
 
-    // Affiche juste le nombre d'essais, jamais d'erreur
-    document.getElementById('statutServeur').textContent = `⏳ Démarrage en cours... Essai ${tentative} — veuillez patienter`;
-    tentative++;
-    // Réessaye après 12 secondes
-    setTimeout(verifierServeur, DELAY_PING);
+    document.getElementById('statut').textContent = `⏳ Démarrage en cours... Essai ${essai}`;
+    essai++;
+    setTimeout(verifierServeur, DELAY);
 }
 
-// Appel API sécurisé
 async function appelApi(url, options = {}) {
-    if (!serveurPret) {
-        document.getElementById('statutServeur').textContent = "⏳ En attente que le serveur soit prêt...";
-        await new Promise(resolve => {
-            const attendre = setInterval(() => {
-                if (serveurPret) { clearInterval(attendre); resolve(); }
-            }, 500);
-        });
-    }
-    const res = await fetch(url, {
-        ...options,
-        headers: { 'Content-Type': 'application/json', ...options.headers }
-    });
+    if (!serveurPret) await new Promise(r => { const att = setInterval(() => { if (serveurPret) { clearInterval(att); r(); } }, 500); });
+    const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json' } });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.erreur || "Problème de connexion");
+    if (!res.ok) throw new Error(data.erreur || "Problème");
     return data;
 }
 
-// Chargement des produits
 async function chargerProduits() {
     try {
         const produits = await appelApi(`${API_URL}/api/produits`);
         document.getElementById('listeProduits').innerHTML = produits.length
-            ? `<h3 style="margin:1.5rem 0; color:#2c3e50;">Produits disponibles</h3>` +
-              produits.map(p => `<div style="background:white; padding:1rem; margin:1rem 0; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,0.1);">
-                <h4>${p.nom}</h4>
-                <p style="font-size:1.2rem; font-weight:bold; color:#e67e22;">${p.prix.toLocaleString('fr-FR')} FCFA</p>
-                <p>${p.description || ''}</p>
-              </div>`).join('')
-            : `<p style="text-align:center; color:#666; margin-top:2rem;">Aucun produit en vente pour le moment.</p>`;
-    } catch (err) {
-        document.getElementById('listeProduits').innerHTML = `<p style="color:#666; text-align:center;">Chargement en cours...</p>`;
-    }
+            ? produits.map(p => `<div style="background:white; padding:1rem; margin:1rem 0; border-radius:6px; box-shadow:0 1px 4px #ddd;"><h4>${p.nom}</h4><p style="font-weight:bold; color:#e67e22;">${p.prix.toLocaleString('fr-FR')} FCFA</p></div>`).join('')
+            : `<p style="text-align:center; color:#666;">Aucun produit</p>`;
+    } catch {}
 }
 
-// Inscription
 async function inscrire() {
     const msg = document.getElementById('msgInscription');
-    msg.textContent = "⏳ Envoi des informations...";
+    msg.textContent = "⏳ Envoi en cours...";
     msg.className = "message info";
     try {
         const data = await appelApi(`${API_URL}/api/inscription`, {
@@ -151,18 +128,17 @@ async function inscrire() {
             })
         });
         msg.className = "message succes";
-        msg.textContent = "✅ Compte créé avec succès ! Vous pouvez vous connecter.";
-        setTimeout(() => afficher('connexion'), 2000);
+        msg.textContent = "✅ Compte créé !";
+        setTimeout(() => afficher('connexion'), 1500);
     } catch (err) {
         msg.className = "message info";
         msg.textContent = `ℹ️ ${err.message}`;
     }
 }
 
-// Connexion
 async function connecter() {
     const msg = document.getElementById('msgConnexion');
-    msg.textContent = "⏳ Vérification des identifiants...";
+    msg.textContent = "⏳ Connexion en cours...";
     msg.className = "message info";
     try {
         const data = await appelApi(`${API_URL}/api/connexion`, {
@@ -174,14 +150,13 @@ async function connecter() {
         });
         localStorage.setItem('token', data.token);
         msg.className = "message succes";
-        msg.textContent = "✅ Connexion réussie ! Bienvenue sur My Shop.";
+        msg.textContent = "✅ Connecté !";
     } catch (err) {
         msg.className = "message info";
         msg.textContent = `ℹ️ ${err.message}`;
     }
 }
 
-// Lancement au chargement
 window.onload = verifierServeur;
 </script>
 
