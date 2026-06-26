@@ -1,0 +1,11 @@
+const https = require('https');
+
+// Ton adresse sur Render
+const SITE_URL = "https://my-shop-9l3j.onrender.com";
+
+// Réveille le serveur toutes les 2 minutes
+setInterval(() => {
+  https.get(SITE_URL, (res) => {
+    console.log("✅ Serveur maintenu en ligne");
+  }).on('error', () => {});
+}, 120000); // 120000 ms = 2 minutes
