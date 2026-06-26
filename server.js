@@ -12,53 +12,105 @@ const PORT = process.env.PORT || 3000;
 // Variables
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const JWT_SECRET = process.env.JWT_SECRET || 'cle_secrete_sure';
+const JWT_SECRET = process.env.JWT_SECRET || 'ma_cle_secrete_sure_2026';
 
-// Connexion
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("❌ Variables Supabase manquantes");
+  process.exit(1);
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Maintien en ligne SIMPLE
+// ✅ CORS COMPLET pour éviter tout blocage
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+app.options("*", cors());
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static(path.join(__dirname)));
+
+// ✅ Maintien en ligne simple
 setInterval(() => {
-  try { require('http').get(`http://localhost:${PORT}/ping`); } catch(e) {}
-}, 60000);
+  const https = require('https');
+  https.get("https://my-shop-9l3j.onrender.com/ping", () => {})
+    .on('error', () => {});
+}, 120000);
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(__dirname));
+// ✅ Ping rapide
+app.get('/ping', (req, res) => res.status(200).send("OK"));
 
-// Ping immédiat
-app.get('/ping', (_, res) => res.send('OK'));
+// Page d'accueil
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-app.get('/', (_, res) => res.sendFile(path.join(__dirname, 'index.html')));
-
-// Inscription
+// ✅ Inscription améliorée
 app.post('/api/inscription', async (req, res) => {
   try {
     const { nom, email, telephone, motDePasse, role } = req.body;
-    const hash = await bcrypt.hash(motDePasse, 10);
-    const { data, error } = await supabase.from('users').insert([{ nom, email, telephone, mot_de_passe: hash, role }]).select();
-    if (error) return res.json({ erreur: error.code === '23505' ? 'Email déjà utilisé' : error.message });
+
+    if (!nom || !email || !telephone || !motDePasse) {
+      return res.status(400).json({ erreur: "Tous les champs sont obligatoires" });
+    }
+
+    const motCrypte = await bcrypt.hash(motDePasse, 10);
+
+    const { data, error } = await supabase
+      .from('users')
+      .insert([{ nom, email, telephone, mot_de_passe: motCrypte, role }])
+      .select();
+
+    if (error) {
+      return res.status(400).json({
+        erreur: error.code === '23505' ? "Cet email est déjà utilisé" : error.message
+      });
+    }
+
     const token = jwt.sign({ id: data[0].id, role }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ succes: true, token });
-  } catch (e) { res.json({ erreur: e.message }); }
+    res.status(201).json({ succes: true, token, utilisateur: data[0] });
+
+  } catch (err) {
+    res.status(500).json({ erreur: "Erreur serveur : " + err.message });
+  }
 });
 
-// Connexion
+// ✅ Connexion améliorée
 app.post('/api/connexion', async (req, res) => {
   try {
     const { email, motDePasse } = req.body;
-    const { data, error } = await supabase.from('users').select('*').eq('email', email).single();
-    if (error) return res.json({ erreur: 'Identifiants invalides' });
-    const ok = await bcrypt.compare(motDePasse, data.mot_de_passe);
-    if (!ok) return res.json({ erreur: 'Mot de passe incorrect' });
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (error || !data) {
+      return res.status(400).json({ erreur: "Email ou mot de passe incorrect" });
+    }
+
+    const valide = await bcrypt.compare(motDePasse, data.mot_de_passe);
+    if (!valide) {
+      return res.status(400).json({ erreur: "Mot de passe invalide" });
+    }
+
     const token = jwt.sign({ id: data.id, role: data.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ succes: true, token });
-  } catch (e) { res.json({ erreur: e.message }); }
+    res.json({ succes: true, token, utilisateur: data });
+
+  } catch (err) {
+    res.status(500).json({ erreur: "Erreur serveur : " + err.message });
+  }
 });
 
-app.get('/api/produits', async (_, res) => {
-  const { data } = await supabase.from('produits').select('*');
-  res.json(data || []);
+// Produits
+app.get('/api/produits', async (req, res) => {
+  try {
+    const { data } = await supabase.from('produits').select('*');
+    res.json(data || []);
+  } catch {
+    res.json([]);
+  }
 });
 
-app.listen(PORT, () => console.log('Serveur prêt'));
+app.listen(PORT, () => console.log(`✅ Serveur opérationnel sur le port ${PORT}`));

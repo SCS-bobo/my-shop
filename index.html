@@ -19,6 +19,7 @@
     .msg { padding:1rem; margin:1rem 0; border-radius:4px; text-align:center; }
     .info { background:#e3f2fd; color:#0c5460; }
     .ok { background:#d4edda; color:#155724; }
+    .err { background:#f8d7da; color:#721c24; }
   </style>
 </head>
 <body>
@@ -35,29 +36,29 @@
 <div class="container">
   <section id="accueil" class="section active">
     <h2>Bienvenue sur My Shop</h2>
-    <div id="statut" class="msg info">⏳ Chargement...</div>
+    <div id="statut" class="msg info">⏳ Chargement du serveur...</div>
     <div id="produits"></div>
   </section>
 
   <section id="inscription" class="section">
     <h2>Créer mon compte</h2>
     <div id="msgInsc"></div>
-    <input type="text" id="nom" placeholder="Nom complet">
-    <input type="email" id="email" placeholder="Email">
-    <input type="tel" id="tel" placeholder="Téléphone">
-    <input type="password" id="mdp" placeholder="Mot de passe">
+    <input type="text" id="nom" placeholder="Nom complet" required>
+    <input type="email" id="email" placeholder="Adresse email" required>
+    <input type="tel" id="tel" placeholder="Numéro de téléphone" required>
+    <input type="password" id="mdp" placeholder="Mot de passe" required>
     <select id="role">
       <option value="client">Client</option>
       <option value="commercant">Commerçant</option>
     </select>
-    <button onclick="inscrire()">Créer</button>
+    <button onclick="inscrire()">Créer mon compte</button>
   </section>
 
   <section id="connexion" class="section">
     <h2>Me connecter</h2>
     <div id="msgCo"></div>
-    <input type="email" id="emailCo" placeholder="Email">
-    <input type="password" id="mdpCo" placeholder="Mot de passe">
+    <input type="email" id="emailCo" placeholder="Adresse email" required>
+    <input type="password" id="mdpCo" placeholder="Mot de passe" required>
     <button onclick="connecter()">Se connecter</button>
   </section>
 </div>
@@ -73,10 +74,14 @@ function show(id) {
 
 async function verifier(essai = 1) {
   try {
-    const res = await fetch(`${API}/ping`, { cache: 'no-store' });
+    const res = await fetch(`${API}/ping`, {
+      method: 'GET',
+      cache: 'no-store',
+      mode: 'cors'
+    });
     if (res.ok) {
       pret = true;
-      document.getElementById('statut').textContent = "✅ Serveur prêt !";
+      document.getElementById('statut').textContent = "✅ Serveur prêt ! Vous pouvez utiliser le site.";
       document.getElementById('statut').className = "msg ok";
       chargerProduits();
       return;
@@ -88,53 +93,61 @@ async function verifier(essai = 1) {
 
 async function appel(url, opt = {}) {
   while (!pret) await new Promise(r => setTimeout(r, 500));
-  const res = await fetch(url, { ...opt, headers: { 'Content-Type': 'application/json' } });
+  const res = await fetch(url, {
+    ...opt,
+    mode: 'cors',
+    headers: { 'Content-Type': 'application/json', ...opt.headers }
+  });
   return res.json();
 }
 
 async function chargerProduits() {
-  const data = await appel(`${API}/api/produits`);
-  document.getElementById('produits').innerHTML = data.length ? data.map(p => `<div style="padding:1rem; margin:1rem 0; background:white; border-radius:6px; box-shadow:0 1px 3px #0002;"><h4>${p.nom}</h4><p style="color:#e67e22; font-weight:bold;">${p.prix} FCFA</p></div>`).join('') : "<p style='text-align:center; color:#666;'>Aucun produit</p>";
+  try {
+    const data = await appel(`${API}/api/produits`);
+    document.getElementById('produits').innerHTML = data.length 
+      ? data.map(p => `<div style="padding:1rem; margin:1rem 0; background:#fff; border-radius:6px; box-shadow:0 1px 3px #0002;"><h4>${p.nom}</h4><p style="color:#e67e22; font-weight:bold;">${p.prix.toLocaleString('fr-FR')} FCFA</p></div>`).join('')
+      : "<p style='text-align:center; color:#666; margin-top:2rem;'>Aucun produit en vente pour le moment.</p>";
+  } catch {}
 }
 
 async function inscrire() {
   const msg = document.getElementById('msgInsc');
-  msg.className = "msg info"; msg.textContent = "En cours...";
+  msg.className = "msg info"; msg.textContent = "⏳ Envoi en cours...";
   try {
     const res = await appel(`${API}/api/inscription`, {
       method: 'POST',
       body: JSON.stringify({
-        nom: document.getElementById('nom').value,
-        email: document.getElementById('email').value,
-        telephone: document.getElementById('tel').value,
+        nom: document.getElementById('nom').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        telephone: document.getElementById('tel').value.trim(),
         motDePasse: document.getElementById('mdp').value,
         role: document.getElementById('role').value
       })
     });
     if (res.erreur) throw new Error(res.erreur);
-    msg.className = "msg ok"; msg.textContent = "✅ Compte créé !";
-    setTimeout(() => show('connexion'), 1500);
+    msg.className = "msg ok"; msg.textContent = "✅ Compte créé avec succès ! Vous pouvez vous connecter.";
+    setTimeout(() => show('connexion'), 2000);
   } catch (e) {
-    msg.className = "msg info"; msg.textContent = `ℹ️ ${e.message}`;
+    msg.className = "msg err"; msg.textContent = `❌ ${e.message}`;
   }
 }
 
 async function connecter() {
   const msg = document.getElementById('msgCo');
-  msg.className = "msg info"; msg.textContent = "Vérification...";
+  msg.className = "msg info"; msg.textContent = "⏳ Vérification en cours...";
   try {
     const res = await appel(`${API}/api/connexion`, {
       method: 'POST',
       body: JSON.stringify({
-        email: document.getElementById('emailCo').value,
+        email: document.getElementById('emailCo').value.trim(),
         motDePasse: document.getElementById('mdpCo').value
       })
     });
     if (res.erreur) throw new Error(res.erreur);
     localStorage.setItem('token', res.token);
-    msg.className = "msg ok"; msg.textContent = "✅ Connecté !";
+    msg.className = "msg ok"; msg.textContent = "✅ Connexion réussie ! Bienvenue.";
   } catch (e) {
-    msg.className = "msg info"; msg.textContent = `ℹ️ ${e.message}`;
+    msg.className = "msg err"; msg.textContent = `❌ ${e.message}`;
   }
 }
 
