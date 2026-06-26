@@ -9,89 +9,72 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Variables d'environnement
+// Variables
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const JWT_SECRET = process.env.JWT_SECRET || 'cle_secrete_sure_2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'ma_cle_secrete_2026';
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("❌ Variables Supabase manquantes");
+  console.error("❌ Variables manquantes");
   process.exit(1);
 }
 
-// Connexion Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Configuration CORS complète
-app.use(cors({ origin: "*", credentials: false }));
-app.options("*", cors());
-app.use(express.json({ limit: '10mb' }));
+// ✅ CORS configuré pour éviter tout blocage
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+app.use(cors());
+app.use(express.json({ limit: '5kb' }));
 app.use(express.static(path.join(__dirname)));
 
-// Maintien en ligne automatique
+// ✅ Maintien en ligne toutes les 60s
 setInterval(() => {
   const https = require('https');
-  const url = process.env.CYCLIC_URL || `http://localhost:${PORT}`;
-  https.get(url + '/ping', () => {}).on('error', () => {});
-}, 120000);
+  https.get("https://my-shop-9l3j.onrender.com/ping", { timeout: 10000 }, () => {})
+    .on('error', () => {});
+}, 60000);
 
 // Routes
-app.get('/ping', (req, res) => res.status(200).send("OK"));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/ping', (_, res) => res.send("OK"));
+app.get('/', (_, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-// Inscription
 app.post('/api/inscription', async (req, res) => {
   try {
     const { nom, email, telephone, motDePasse, role } = req.body;
-    if (!nom || !email || !telephone || !motDePasse) {
-      return res.status(400).json({ erreur: "Tous les champs sont obligatoires" });
-    }
-    const motCrypte = await bcrypt.hash(motDePasse, 10);
-    const { data, error } = await supabase
-      .from('users')
-      .insert([{ nom, email, telephone, mot_de_passe: motCrypte, role }])
-      .select();
-    if (error) {
-      return res.status(400).json({ erreur: error.code === '23505' ? "Cet email est déjà utilisé" : error.message });
-    }
+    if (!nom || !email || !telephone || !motDePasse) return res.json({ erreur: "Tous les champs sont obligatoires" });
+    const hash = await bcrypt.hash(motDePasse, 10);
+    const { data, error } = await supabase.from('users').insert([{ nom, email, telephone, mot_de_passe: hash, role }]).select();
+    if (error) return res.json({ erreur: error.code === '23505' ? "Email déjà utilisé" : error.message });
     const token = jwt.sign({ id: data[0].id, role }, JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ succes: true, token, utilisateur: data[0] });
-  } catch (err) {
-    res.status(500).json({ erreur: "Erreur serveur : " + err.message });
+    res.json({ succes: true, token });
+  } catch (e) {
+    res.json({ erreur: e.message });
   }
 });
 
-// Connexion
 app.post('/api/connexion', async (req, res) => {
   try {
     const { email, motDePasse } = req.body;
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
-    if (error || !data) {
-      return res.status(400).json({ erreur: "Email ou mot de passe incorrect" });
-    }
-    const valide = await bcrypt.compare(motDePasse, data.mot_de_passe);
-    if (!valide) {
-      return res.status(400).json({ erreur: "Mot de passe invalide" });
-    }
+    const { data, error } = await supabase.from('users').select('*').eq('email', email).single();
+    if (error) return res.json({ erreur: "Identifiants incorrects" });
+    const ok = await bcrypt.compare(motDePasse, data.mot_de_passe);
+    if (!ok) return res.json({ erreur: "Mot de passe invalide" });
     const token = jwt.sign({ id: data.id, role: data.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ succes: true, token, utilisateur: data });
-  } catch (err) {
-    res.status(500).json({ erreur: "Erreur serveur : " + err.message });
+    res.json({ succes: true, token });
+  } catch (e) {
+    res.json({ erreur: e.message });
   }
 });
 
-// Liste des produits
-app.get('/api/produits', async (req, res) => {
-  try {
-    const { data } = await supabase.from('produits').select('*');
-    res.json(data || []);
-  } catch {
-    res.json([]);
-  }
+app.get('/api/produits', async (_, res) => {
+  const { data } = await supabase.from('produits').select('*');
+  res.json(data || []);
 });
 
-app.listen(PORT, () => console.log(`✅ Serveur prêt sur le port ${PORT}`));
+app.listen(PORT, () => console.log("✅ Serveur prêt"));
