@@ -83,14 +83,13 @@ async function verifier(essai = 1) {
     }
   } catch {}
   document.getElementById('statut').textContent = `⏳ Attente... Essai ${essai}`;
-  setTimeout(() => verifier(essai + 1), 5000);
+  setTimeout(() => verifier(essai + 1), 3000);
 }
 
-// Appel avec délai et nouvelle tentative
+// ✅ Appel avec 3 tentatives automatiques
 async function appel(url, opt = {}) {
   while (!pret) await new Promise(r => setTimeout(r, 500));
-  const maxEssais = 3;
-  for (let i = 0; i < maxEssais; i++) {
+  for (let i = 0; i < 3; i++) {
     try {
       const res = await fetch(url, {
         ...opt,
@@ -100,9 +99,9 @@ async function appel(url, opt = {}) {
       });
       if (res.ok) return await res.json();
     } catch {}
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 1500));
   }
-  throw new Error("Impossible de joindre le serveur, réessayez");
+  throw new Error("Réessayez, le réseau est lent");
 }
 
 async function chargerProduits() {
@@ -155,6 +154,3 @@ async function connecter() {
 
 window.onload = verifier;
 </script>
-
-</body>
-</html>
